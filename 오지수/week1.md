@@ -116,23 +116,210 @@ NUserDao와 DUserDao에서 생성하는 Connection 오브젝트의 구현 클래
 
 ### 🌱 클래스의 분리
 
+관심사를 메소드가 아닌 아예 독립적인 클래스로 분리시킨다!
+
+- 한 번만 SimpleConnectionMaker 오브젝트를 생성하여 저장해두고 계속 사용한다!
+
+<img width="800" src="./img/week1/separated-class.PNG"/>
+
+<br>
+
+But, 다른 문제 발생!
+
+- UserDao의 코드가 `SimpleConnectionMaker`라는 특정 클래스에 종속되어버리면서 connection 기능 확장장이 불가능해졌다!
+
+<br>
+
+우리가 해결해야 할 문제
+
+- UserDao가 바뀔 수 있는 정보, 즉 DB 커넥션을 가져오는 클래스에 대해 너무 많이 알고 있음.
+  - 그러므로 고객이 DB 커넥션을 자유롭게 확장하기 위해 다른 클래스를 구현하려면 어쩔 수 없이 UserDao 자체를 다시 수정해야 함.
+
 ### 🌱 인터페이스의 도입
+
+추상화 작업을 해보자!
+
+- 추상화: 어떤 것들의 공통적인 성격을 뽑아내어 이를 따로 분리해내는 작업.
+
+  - 인터페이스로 추상화해놓은 최소한의 통로를 통해 접근? 오브젝트를 만들 때 사용할 클래스가 무엇인지 몰라도 됨!
+
+    <img width="800" src="./img/week1/interface.PNG"/>
 
 ### 🌱 관계설정 책임의 분리
 
+하지만 여전히 UserDao에는 어떤 Connection 구현 크래스를 사용할지 결정하는 코드가 남아있다.
+
+- UserDao의 클라이언트에서 UserDao를 사용하기 전에, 먼저 UserDao가 어떤 ConnectionMaker의 구현 클래스를 사용할지를 결정하도록 만들어주자!
+
+<br>
+
+UserDao 오브젝트가 사용할 구현 클래스를 **메소드 파라미터** 혹은 **생성자 파라미터**를 이용하여 전달해준다!
+
+> 객체 지향의 **다형성 특징을 사용**한다!
+
+클래스 사이의 관계 X, 오브젝트 사이의 다이내믹한 관계가 만들어지는 것.
+
+- 클래스 사이의 관계: 코드에 다른 클래스 이름이 나타나면서 만들어짐.
+- 오브젝트 사이의 관계
+  - 코드에서는 특정 클래스를 전혀 알지 못함.
+  - 다만 해당 클래스가 구현한 인터페이스를 사용하여 해당 클래스를 인터페이스 타입으로 받아 사용하는 것!
+
+#### 책임을 클라이언트로 떠넘기자!
+
+다음과 같이 userDao client가 구체적인 클래스를 생성하여 UserDao의 생성자로 넣어주게 되는 것이다!
+
+- UserDao와 ConnectionMaker 구현 클래스와의 런타임 오브젝트 의존 관계 설정 책임을 담당하게 되는 것.
+  <img width="800" src="./img/week1/userDao-client.PNG"/>
+
+<br>
+
+UserDaoTest가 추가된 구조는 다음과 같다.
+
+<img width="800" src="./img/week1/structure-with-UserDaoTest.PNG"/>
+
 ### 🌱 원칙과 패턴
+
+#### 개방 폐쇄 원칙
+
+클래스와 모듈은 확장에는 열려 있어야 하고 변경에는 닫혀 있어야 한다!
+
+#### 높은 응집도와 낮은 결합도
+
+- 응집도가 높다는 것?
+  - 하나의 모듈, 클래스가 하나의 책임 또는 관심사에만 집중되어 있따는 것.
+  - 하나의 공통 관심사는 한 클래스에!
+- 낮은 결합도?
+  - 책임과 관심사가 다른 오브젝트 또는 모듈과는 느슨하게 연결된 형태를 유지해야 한다.
+  - 느슨한 결합
+    - 관계를 유지하는 데 꼭 필요한 최소한의 방법만 간접적인 형태로 제공. <br>
+      나머지는 서로 독립적이고 알 필요도 없게 만들어 주는 것.
+
+#### 전략 패턴
+
+자신의 기능 맥락(context)에서, 필요에 따라 변경이 필요한 알고리즘을 인터페이스를 통해 통째로 외부로 분리시키고, 이를 구현한 구체적인 알고리즘 클래스를 필요에 따라 바꿔서 사용할 수 있게 하는 디자인 패턴.
 
 ## 🌿 제어의 역전(IoC)
 
 ### 🌱 오브젝트 팩토리
 
+현재 UserDaoTest는 UserDao의 기능 동작 테스트 뿐 만 아니라, ConnectionMaker의 구현 클래스를 결정하는 역할까지 떠맡음.
+
+한 가지씩 역할을 맡아야 하기 때문에,
+
+- UserDao와 ConnectionMaker 구현 클래스의 오브젝트를 만드는 것
+- 두 개의 오브젝트가 연결되어 사용될 수 있또록 관계를 맺어주는 것
+
+이 기능들을 분리해주자!
+
+#### 팩토리
+
+팩토리 클래스의 역할: 객체의 생성 방법을 결정하고 그렇게 만들어진 오브젝트를 돌려주는 것.
+
+- 여기서는 UserDaoTest 내부의 UserDao, ConnectionMaker 관련 생성 작업을 맡는다!
+
+```java
+
+/**
+ * 다음과 같이 팩토리의 메소드는 UserDao 타입의 오브젝트를
+ * 어떻게 만들고, 어떻게 준비시킬지를 결정함.
+**/
+
+public class DaoFactory{
+    public UserDao userDao() {
+        ConnectionMaker connectionMaker = new DConnectionMaker();
+        UserDao userDao = new UserDao(connectionMaker);
+        return userDao;
+    }
+}
+```
+
+#### 설계도로서의 팩토리
+
+- 어떤 오브젝트가 어떤 오브젝트를 사용하는지 보임.
+
+<img width="800" src="./img/week1/structure-with-ObjectFactory.PNG"/>
+
+<br>
+
+역할과, 관계를 분석해보자
+
+<table>
+    <tr>
+        <th>UserDao</th>
+        <th>ConnectionMaker</th>
+        <th>DaoFactory</th>
+    </tr>
+    <tr>
+        <td>어떻게 데이터를 등록하고 가져올 것인가?</td>
+        <td>어떻게 DB에 연결할 것인가?</td>
+        <td>오브젝트들을 어떻게 구성하고, 그 관계를 정의할 것인가?</td>
+    </tr>
+</table>
+
 ### 🌱 오브젝트 팩토리의 활용
 
+- UserDao가 아닌 다른 DAO의 생성 기능을 DaoFactory에 넣게 된다면?
+  - 다음과 같이 ConnectionMaker 구현 클래스를 선정하고 생성하는 코드가 중복되게 됨.
+
+```java
+public class DaoFactory{
+    public UserDao userDao() {
+        ConnectionMaker connectionMaker = new DConnectionMaker(); // 중복
+        UserDao userDao = new UserDao(connectionMaker);
+        return userDao;
+    }
+
+    public AccountDao accountDao() {
+        ConnectionMaker connectionMaker = new DConnectionMaker();// 중복
+        AccountDao accountDao = new AccountDao(connectionMaker);
+        return accountDao;
+    }
+
+    public MessageDao messageDao() {
+        ConnectionMaker connectionMaker = new DConnectionMaker();// 중복
+        MessageDao messageDao = new MessageDao(connectionMaker);
+        return messageDao;
+    }
+}
+```
+
+#### 중복 제거하기
+
+```java
+public class DaoFactory{
+    public UserDao userDao() {
+        return new UserDao(connectionMaker());
+    }
+
+    public AccountDao accountDao() {
+        return new AccountDao(connectionMaker());
+    }
+
+    public MessageDao messageDao() {
+        return new MessageDao(connectionMaker());
+    }
+
+    public ConnectionMaker connectionMaker() {
+        return new DConnectionMaker();
+    }
+}
+```
+
 ### 🌱 제어권의 이전을 통한 제어관계 역전
+
+제어의 역전? 프로그램 제어 흐름 구조가 뒤바뀌는 것!
+
+- 오브젝트는 자신이 사용할 오브젝트를 스스로 선택하지 않음. + 당연히 생성하지도 않음.
+- 자신이 어떻게 만들어지고, 어떻게 사용되는지도 알지 못함.
+  - 모든 제어 권한을 다른 대상에게 위임하기 때문.
+
+→ main() 과 같은 엔트리 포인트를 제외하고, 모든 오브젝트는 이렇게 **위임받은 제어 권한을 갖는 특별한 오브젝트에 의해 결정되고 만들어짐**.
 
 ## 🌿 스프링의 IoC
 
 ### 🌱 오브젝트 팩토리를 이용한 스프링의 IoC
+
+#### 애플리케이션 컨텍스트와 설정정보
 
 ### 🌱 애플리케이션 컨텍스트의 동작방식
 
