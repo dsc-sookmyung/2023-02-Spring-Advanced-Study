@@ -839,9 +839,9 @@ public class DaoFactory {
 
 ### 🌱 XML 설정
 
-<beans> 를 루트 엘리먼트로 사용함.
+&lt;beans> 를 루트 엘리먼트로 사용함.
 
-- 이 안에 여러개의 <bean> 을 정의할 수 있음.
+- 이 안에 여러개의 &lt;bean> 을 정의할 수 있음.
 
 하나의 `@Bean` 메소드를 통해 얻을 수 있는 빈의 DI 정보?
 
@@ -851,12 +851,89 @@ public class DaoFactory {
 
 #### connectionMaker() 전환
 
+<table>
+    <tr>
+        <th></th>
+        <th>자바 코드 설정정보</th>
+        <th>XML 설정정보</th>
+    </tr>
+    <tr>
+        <td>빈 설정파일</td>
+        <td>@Configuration</td>
+        <td> &lt;beans> </td>
+    </tr>
+    <tr>
+        <td>빈의 이름</td>
+        <td>@Bean methodName()</td>
+        <td> &lt;bean id="methodName"> </td>
+    </tr>
+    <tr>
+        <td>빈의 클래스</td>
+        <td>return new BeanClass();</td>
+        <td> class = "a,b,c ... BeanClass> </td>
+    </tr>
+</table>
+
+<img width="900" src="./img/week1/toXml.png"/>
+
+#### userDao() 전환
+
+setter 메소드 선호하는 이유 중 하나는 XML로 의존관계 정보를 만들 때 굉장히 편리하다는 것!
+
+- &lt;property> 태그를 사용하여 의존 오브젝트와의 관계 정의 가능.
+  - name: 프로퍼티의 이름 → 이를 통해 수정자 메소드를 알 수 있음.
+  - ref: 수정자 메소드를 통해 주입해줄 오브젝트의 빈 이름.
+
+<br>
+
+```java
+userDao.setConnectionMaker(connectionMaker());
+```
+
+- `userDao.setConnectionMaker()` 는 userDao 빈의 connectionMaker 프로퍼티를 사용해 의존관계 정보를 주입해준다는 것!
+  - 즉 name attribute엔 setConnectionMaker에서 프로퍼티의 이름을 가져와 `connectionMaker`이고
+  - ref attribute에는 connectionMaker() 메소드를 호출한다는 의미로 메소드 이름인 `connectionMaker` 가 들어간다.
+
+<img width="900" src="./img/week1/userDao-Bean-Setting.PNG"/>
+
+#### XML 의존관계 주입 정보
+
+- name: DI에 사용할 수정자 메소드의 프로퍼티
+- ref: 주입할 오브젝트를 정의한 빈의 ID
+
+<img width="900" src="./img/week1/same-interface-type.PNG"/>
+
 ### 🌱 XML을 이용하는 애플리케이션 컨텍스트
+
+> 참고로 스프링부트로 넘어오면서 XML을 사용한 설정은 잘 사용하진 않는다고 한다.
+
+- XML 설정파일 이름: applicationContext.xml
+
+```java
+ApplicationContext context = new GenerixXmlApplicationContext("applicationContext.xml");
+```
 
 ### 🌱 DataSource 인터페이스로 변환
 
+#### DataSource 인터페이스 적용
+
+```java
+public interface DataSource extends CommonDataSource, Wrapper {
+  Connection getConnection() throws SQLException;
+}
+```
+
 ### 🌱 프로퍼티 값의 주입
 
-```
+#### 값 주입
 
-```
+다른 빈의 오브젝트가 아닌 단순 값을 주입해주는 경우는 value attribute를 사용해준다.
+
+다음과 같이 수정자 메소드를 호출해서 DB 연결을 넣는 경우 코드와 XML로 이렇게 표현할 수 있다.
+
+<img width="900" src="./img/week1/code-xml-db-connection-settings.PNG"/>
+
+#### value 값의 자동 변환
+
+또한 이 value에 지정한 텍스트 값은 적절한 자바 타입으로 변환된다. <br>
+Integer, Double, String, Boolean 뿐 만 아니라 Class, URL, File 등의 오브젝트로도 변환이 가능하다.
