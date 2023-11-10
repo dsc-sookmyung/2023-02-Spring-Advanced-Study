@@ -278,9 +278,212 @@ ANT, Maven과 같은 빌드 툴을 사용하고 있다면, (최근엔 보통 Gra
 
 ### 🌱 테스트 결과의 일관성
 
-아직 불편한 점은 남아있다.
+아직 아쉬운 점은 남아있다.
+
+UserDaoTest 테스트를 실행하기 전에 **DB의 USER 테이블 데이터를 모두 삭제**해주야 하기 때문!
+
+- 그냥 테스트를 실행했다가는 이전 테스트를 실행했을 때 등록됐던 사용자 정보와 기본키가 중복되어 에러가 발생함.
+
+테스트가 외부 상태에 따라 성공하기도 하고 실패하기도 한다는 것! <br>
+이 테스트를 좋은 테스트라고 할 수 없음.
+
+가장 좋은 해결책 <br>
+: 테스트가 등록한 사용자 정보를 삭제하여 **테스트를 수행하기 이전 상태**로 만들어주는 것.
+
+#### deleteAll()의 getCount() 추가
+
+- deleteAll(): 모든 레코드를 삭제하는 기능.
+
+```java
+public void deleteAll() throws SQLException {
+  Connection c = dataSource.getConnection();
+
+  PreparedStatement ps = c.prepareStatement("delete from users");
+  ps.executeUpdate();
+
+  ps.close();
+  c.close();
+}
+```
+
+<br>
+
+- getCount(): User 테이블의 레코드 개수를 돌려줌.
+
+```java
+public int getCount() throws SQLException {
+  Connection c = dataSource.getConnection();
+
+  PreparedStatement ps = c.prepareStatement("select count(*) from users");
+  ResultSet rs = ps.executeQuery();
+  rs.next();
+
+  int count = rs.getInt(1);
+
+  rs.close();
+  ps.close();
+  c.close();
+
+  return count;
+}
+```
+
+#### deleteAll()과 getCount()의 테스트
+
+add()와 get()처럼 독립적으로 자동 실행되는 테스트를 만들기가 애매함.
+
+따라서 기존에 만든 addAndGet() 테스트를 확장하는 방법을 사용하는 편이 더 나을 것!
+
+- deleteAll() 이 실행한 직후에 getCount()을 실행하여 0이 나온다면 deleteAll()의 정상작동을 확인할 수 있음.
+- 앞에서 이미 검증한 add() 직후에 getCount() 실행하면 1이 나오는지 확인하여 getCount()의 기능을 확인할 수 있음.
+
+```java
+public class userDaoTest {
+
+    @Test
+    public void addAndGet() throws SQLException {
+        ...
+
+        dao.deleteAll()
+        assertThat(dao.getCount(), is(0))
+
+        User user = new User();
+        user.setId("gyumee");
+        user.setName("박성철");
+        user.setPassword("springno1");
+
+        dao.add(user);
+        assertThat(dao.getCount(), is(1));
+
+        User user2 = dao.get(user.getId());
+
+        assertThat(user2.getName(), is(user.getName()))
+        assertThat(user2.getPassword(), is(user.getPassword()))
+  }
+}
+```
+
+#### 동일한 결과를 보장하는 테스트
+
+위 테스트를 반복해서 여러 번 실행해도 계속 성공함.
+
+물론 다른 방법도 존재함.
+
+- addAndGet() 테스트를 마치기 직전에 **테스트가 변경하거나 추가한 데이터를 모두 원래 상태로** 만들어 주는 것.
+  - 특히나 addAndGet() 메서드만 User 테이블을 사용하는 게 아니라면, 이런 방법이 더 나을 것.
 
 ### 🌱 포괄적인 테스트
+
+테스트를 안 만드는 것도 위험하지만, 성의 없이 테스트를 만들어서 문제가 있는 코드인데도 테스트가 성공하게 만드는건 더 위험하다.
+
+#### getCount() 테스트
+
+조금 더 꼼꼼한 getCount() 테스트를 작성해보자.
+
+테스트 시나리오
+
+1. USER 테이블의 데이터를 모두 지우기
+2. getCount() 로 레코드 개수가 0임을 확인
+3. 3개의 사용자 정보를 하나씩 추가하며 매번 getCount() 결과가 하나씩 증가하는지 확인하기
+
+```java
+@Test
+public void count() throws SQLException {
+    Application context =
+                new GenericXmlApplicationContext("applicationContext.xml");
+
+    UserDao dao = context.getBean("userDao", UserDao.class);
+
+    // User 생성자 추가함
+    User user1 = new User("gyumee", "박성철", "springno1");
+    User user2 = new User("leegw700", "이길원", "springno2");
+    User user3 = new User("bumjin", "박범진", "springno3");
+
+    dao.deleteAll()
+    assertThat(dao.getCount(), is(0))
+
+    dao.add(user1);
+    assertThat(dao.getCount(), is(1))
+
+    dao.add(user2);
+    assertThat(dao.getCount(), is(2))
+
+    dao.add(user3);
+    assertThat(dao.getCount(), is(3))
+}
+```
+
+**테스트가 어떤 순서대로 실행될지는 전혀 알 수 없다는 점**을 주의해야 한다!
+
+- 테스트의 결과가 테스트 실행 순서에 영향을 받는다면 테스트를 잘못 만든 것
+- 모든 테스트는 **실행 순서에 상관없이 독립적으로 항상 동일한 결과**를 낼 수 있도록 해야 한다.
+
+#### addAndGet() 테스트 보완
+
+get() 메소드에 대한 테스트 기능을 더 보완하자
+
+1. User를 하나 더 추가해서 두 개의 User를 add()하고,
+2. 각 User의 id를 파라미터로 전달하여 get()을 실행시키도록 함.
+
+```java
+@Test
+public void addAndGet() throws SQLException {
+    Application context =
+                new GenericXmlApplicationContext("applicationContext.xml");
+
+    UserDao dao = context.getBean("userDao", UserDao.class);
+
+    // User 생성자 추가함
+    User user1 = new User("gyumee", "박성철", "springno1");
+    User user2 = new User("leegw700", "이길원", "springno2");
+
+    dao.deleteAll();
+    assertThat(dao.getCount(), is(0));
+
+    dao.add(user1);
+    dao.add(user2);
+    assertThat(dao.getCount(), is(2));
+
+    User userget1 = dao.get(user1.getId());
+    assertThat(userget1.getName(), is(user1.getName()));
+    assertThat(userget1.getPassword(), is(user1.getPassword()));
+
+    User userget2 = dao.get(user2.getId());
+    assertThat(userget2.getName(), is(user2.getName()));
+    assertThat(userget2.getPassword(), is(user2.getPassword()));
+}
+```
+
+#### get() 예외 조건에 대한 테스트
+
+get() 메소드에 전달된 id 값에 해당하는 사용자 정보가 없다면? <br>
+id에 해당하는 정보를 찾을 수 없다고 예외를 던진다!
+
+- 여기서는 스프링이 미리 정의해놓은 데이터 액세스 예외 클래스를 사용한다.
+  - `EmptyResultDataAccessException` 예외 사용
+
+이 때는 예외가 '발생'되어야 테스트가 성공인데, 어떻게 작성해야 테스트를 성공시킬 수 있을까?
+
+- `@Test(expected=EmptyResultDataAccessException.class)`를 넣어서 기대하면 예외 클래스를 지정한다.
+  > @Test 애노테이션에 expected를 추가해놓으면 보통의 테스트와는 반대로, <br> 정상적으로 테스트를 마치면 테스트가 실패하고, <br> expected에서 지정한 예외가 던져지면 테스트가 성공함.
+
+```java
+@Test(expected=EmptyResultDataAccessException.class)
+public void getUserFailure() throws SQLException {
+  Application context =
+                new GenericXmlApplicationContext("applicationContext.xml");
+
+  UserDao dao = context.getBean("userDao", UserDao.class);
+  dao.deleteAll();
+
+  assetThat(dao.getCount(), is(0));
+
+  dao.get("unknwon_id") // 예외를 발생시키는 아이디
+}
+
+```
+
+#### 테스트를 성공시키기 위한 코드의 수정
 
 ### 🌱 테스트가 이끄는 개발
 
