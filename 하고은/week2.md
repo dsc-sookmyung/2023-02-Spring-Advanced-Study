@@ -6,8 +6,6 @@
 
 ### UserDaoTest의 문제점
 
----
-
 ```java
  User user2 = userDao.get(user.getId());
  System.out.println(user2.getName());
@@ -41,6 +39,8 @@ if (!user.getName().equals(user2.getName())){
 }
 ```
 
+</br>
+
 ## 테스트의 효율적인 수행과 결과 관리
 
 - main() 메소드를 이용한 테스트는 규모가 커질 때 테스트 수행에 부담이 됨
@@ -71,8 +71,6 @@ assertThat(user2.getPassword(), is(user.getPassword()));
 - 코드에 변경 사항이 없다면 테스트는 항상 동일한 결과를 내야함
 
 ### deleteAll()의 getCount() 추가
-
----
 
 - addAndGet() 테스트에 deleteAll()과 getCount() 추가
 
@@ -117,6 +115,7 @@ public void addAndGet() throws SQLException {
     assertEquals(userDao.getCount(), 0);
  }
 ```
+</br>
 
 ## 포괄적인 테스트
 
@@ -124,8 +123,6 @@ public void addAndGet() throws SQLException {
 - 모든 테스트는 실행 순서에 상관없이 독립적으로 항상 동일한 결과를 출력해야 함
 
 ### addAndGet() 테스트 보완
-
----
 
 - 주어진 id에 해당하는 정확한 User 정보인지 확인
 
@@ -136,8 +133,6 @@ assertEquals(user1.getPassword(), user.getPassword());
 ```
 
 ### get() 예외조건에 대한 테스트
-
----
 
 - 정상적으로 테스트를 마치면 실패
 - 예외가 반드시 발생해야 하는 경우를 테스트할 때 유용
@@ -180,12 +175,11 @@ public User get(String id) throws SQLException {
     return user;
 }
 ```
+</br>
 
 ## 테스트가 이끄는 개발
 
 ### 기능설계를 위한 테스트
-
----
 
 |      | 단계               | 내용                                        | 코드                                                   |
 | ---- | ------------------ | ------------------------------------------- | ------------------------------------------------------ |
@@ -199,8 +193,6 @@ public User get(String id) throws SQLException {
 
 ### 테스트 주도 개발
 
----
-
 - 만들고자 하는 기능의 내용을 담고 있으면서 만들어진 코드를 검증도 해줄 수 있도록 테스트 코드를 먼저 만들고, 테스트를 성공하게 해주는 코드를 작성하는 방식의 개발
 - 테스트 우선 개발로도 불림
 - “실패한 테스트를 성공시키기 위한 목적이 아닌 코드는 만들지 않는다.”
@@ -208,11 +200,11 @@ public User get(String id) throws SQLException {
 - 코드를 만들어 테스트를 실행하는 사이의 간격이 매우 짧음
   - 오류를 빨리 찾아낼 수 있음
 
+</br>
+
 ## 테스트 코드 개선
 
 ### @Before
-
----
 
 - JUnit이 제공하는 애노테이션, @Test 메소드가 실행되기 전에 먼저 실행돼야 하는 메소드를 정의
 - 테스트 메소드 개수만큼 반복
@@ -240,12 +232,8 @@ public class UserDaoTestt {
   7. 모든 테스트의 결과를 종합해서 돌려준다.
 - 테스트 메소드를 실행할 때마다 테스트 클래스의 오브젝트를 새로 만듦
   → 각 테스트가 서로 영향을 주지 않고 독립적으로 실행됨을 보장
-  ![JUnit의 테스트 메소드 실행 방법](https://prod-files-secure.s3.us-west-2.amazonaws.com/cffbc2f7-d0a1-4cb5-bca1-2978cc0c8da7/fab2a5e4-c241-4556-a41c-4dbaf52137a7/Untitled.png)
-  JUnit의 테스트 메소드 실행 방법
 
 ### 픽스처
-
----
 
 - 테스트를 수행하는 데 필요한 정보나 오브젝트
   ex) UserDaoTest의 dao, 테스트 중 add() 메소드에 전달하는 User 오브젝트
@@ -285,8 +273,6 @@ public class UserDaoTest {
 
 ### 스프링 테스트 컨텍스트 프레임워크 적용
 
----
-
 ```java
 @RunWith(SpringJUnit4ClassRunner.class) // 스프링 테스트 컨텍스트 프레임워크의 JUnit 확장 기능 지정
 @ContextConfiguration(locations = "/applicationContext.xml") // 테스트 컨텍스트가 자동으로 만들어줄 애플리케이션 컨텍스트의 설정 파일 위치 지정
@@ -297,15 +283,11 @@ public class UserDaoTest {
 
 ### 테스트 메소드의 컨텍스트 공유
 
----
-
 - JUnit 확장 기능은 테스트가 실행되기 전에 애플리케이션 컨텍스트를 한 번만 만들어두고 테스트 오브젝트가 만들어질 때마다 특별한 방법을 이용해 애플리케이션 컨텍스트 자신을 테스트 오브젝트의 특정 필드에 주입
   - 일종의 DI, 애플리케이션 오브젝트 사이의 관계 관리를 위한 DI와 다름)
   - **애플리케이션 컨텍스트를 공유**하여 사용하는 것임
 
 ### 테스트 클래스의 컨텍스트 공유
-
----
 
 - 여러 개의 테스트 클래스가 모두 같은 설정 파일을 가진 애플리케이션 컨텍스트를 사용하면 **테스트 클래스 사이에서도 애플리케이션 컨텍스트를 공유**하게 해줌
 
@@ -321,8 +303,6 @@ public class UserDaoTest {..}
 ```
 
 ### @Autowired
-
----
 
 - 테스트 컨텍스트 프레임워크는 @Autowired가 붙은 인스턴스 변수 타입과 일치하는 컨텍스트 내의 빈을 찾음 → 일치하는 빈이 있으면 인스턴스 변수에 주입
   - 생성자, 수정자 메소드가 없어도 주입 가능
@@ -347,8 +327,6 @@ public class UserDaoTest {..}
 
 ### DI와 테스트
 
----
-
 - SimpleDriverDataSource만 사용한다고 하더라도 인터페이스를 두고 DI를 적용해야 함
 
 1. 소프트웨어 개발에서 절대로 바뀌지 않는 것은 없음
@@ -356,8 +334,6 @@ public class UserDaoTest {..}
 3. 효율적인 테스트를 위해 DI 사용이 필요함 (작은 단위의 대상에 대해 독립적으로 만들어지고 실행되게 하는 데 중요)
 
 ### 테스트 코드에 의한 DI
-
----
 
 - 여러 오브젝트와 복잡한 의존관계를 갖고 있는 오브젝트를 테스트해야할 경우라면 스프링의 설정을 이용한 DI 방식의 테스트를 이용하면 편리 (수동 DI)
 - 애플리케이션 컨텍스트에서 applicationContext.xml 파일의 설정 정보를 따라 구성한 오브젝트를 가져와 의존관계를 강제로 변경한 것이므로 주의해서 사용해야 함
@@ -385,8 +361,6 @@ public class UserDaoTest {
 
 ### 컨테이너 없는 DI 테스트
 
----
-
 - UserDao, DataSource 구현 클래스에는 스프링의 API를 직접 사용하거나 애플리케이션 컨텍스트를 이용하는 코드가 없음
 - 스프링 DI 컨테이너에 의존하지 않으므로 테스트 코드에서 직접 오브젝트를 만들고 DI 해서 사용해도 됨
 - 장점: 테스트 시간 절약 가능, 단순하고 이해하기 쉬움
@@ -413,9 +387,7 @@ public class UserDaoTest {
   - 컨테이너가 DI를 가능하게 하는 것이 아님
 
 <aside>
-📌 **침투적 기술과 비침투적 기술**
-
----
+📌 침투적 기술과 비침투적 기술
 
 - 침투적 기술: 기술 적용시 애플리케이션 코드에 기술 관련 API가 등장하거나, 특정 인터페이스나 클래스를 사용하도록 강제하는 기술
   → 애플리케이션 코드가 해당 기술에 종속
@@ -423,8 +395,6 @@ public class UserDaoTest {
 </aside>
 
 ### DI를 이용한 테스트 방법 선택
-
----
 
 1. 스프링 컨테이너 없이 테스트
    - 테스트 수행속도가 빠름
@@ -454,8 +424,6 @@ public class UserDaoTest {
 ## 학습 테스트 예제
 
 ### JUnit 테스트 오브젝트 테스트
-
----
 
 ```java
 public class JUnitTest {
@@ -495,8 +463,6 @@ public class JUnitTest {
 ```
 
 ### 스프링 테스트 컨텍스트 테스트
-
----
 
 ```java
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -550,8 +516,6 @@ public class JUnitTest {
 <aside>
 📌 동등 분할
 
----
-
 - 같은 결과를 내는 값의 범위를 구분해서 각 대표 값으로 테스트를 하는 방법 (ex. true, false, 예외 발생)
 </aside>
 
@@ -559,8 +523,6 @@ public class JUnitTest {
 
 <aside>
 📌 경계값 분석
-
----
 
 - 에러는 동등분할 범위의 경계에서 주로 많이 발생한다는 특징을 이용
 - 경계의 근처에 있는 값을 이용해 테스트하는 방법
