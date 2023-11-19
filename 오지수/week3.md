@@ -698,6 +698,7 @@ public void deleteAll() throws SQLException {
 public class JdbcContext {
     private DataSource dataSource;
 
+    // DataSource 타입 빈을 DI 받을 수 있게 준비해둠.
     public void setDataSource(DataSource datasource) {
         this.dataSource = dataSource;
     }
@@ -746,11 +747,281 @@ public class UserDao {
 }
 ```
 
+#### 빈 의존관계 변경
+
+UserDao는 이제 JdbcContext에 의존하고 있음.
+
+- 근데 JdbcContext는 인터페이스인 DataSource와 다르게 구체 클래스!
+
+스프링 DI 는 기본적으로 **인터페이스를 사이에 두고 의존 클래스를 바꿔서 사용하도록 하는 게 목적**!
+
+하지만 이 경우 JdbcContext는 그 자체로 독립적인 JDBC 컨텍스트를 제공해주는 서비스 오브젝트로서 의미가 있을 뿐이고 구현 방법이 바뀔 가능성은 희박함. <br>
+→ 따라서 인터페이스를 구현하도록 만들지 않음.
+
+<img width="900" src="./img/week3/userdao_jdbccontext.PNG">
+
 ### 🌱 JdbcContext의 특별한 DI
+
+#### 스프링 빈으로 DI
+
+UserDao는 인터페이스를 거치지 않고 코드에서 바로 JdbcContext라는 구체 클래스를 사용하고 있다.
+
+- 이렇게 인터페이스를 사용하지 않고 DI를 적용하는 것은 문제가 있진 않을까?
+
+물론 의존관계 주입이라는 개념을 충실히 따르자면, 인터페이스를 사이에 둬서 클래스 레벨에서는 의존관계까 고정되지 않게 하고 런타임 시에 의존할 오브젝트와의 관계를 다이내믹하게 주입해주는게 맞음!
+
+하지만 스프링의 DI를 **넓게 보면** 객체의 생성, 관계 설정에 대한 제어 권한을 외부로 위임했다는 **IoC의 개념을 포괄**함.
+
+- 그런 의미에서 JdbcContext역시도 DI의 기본은 따르고 있다는 것!
+
+<br>
+
+그렇다면 JdbcContext를 UserDao와 **왜 굳이 DI 구조로** 만들어야 했을까?
+
+1. JdbcContext가 스프링 컨테이너의 싱글톤 레지스트리에서 관리되는 싱글톤 빈이 되기 때문!
+   - JdbcContext는 stateless함! (dataSource는 읽기 전용이므로 문제 X) : 싱글톤이 되는 데 아무런 문제가 없음.
+   - JDBC 컨텍스트 메소드를 제공해주는 일종의 서비스 오브젝트임. <br>
+     → 그러므로 **여러 오브젝트에서 공유해 사용하는 것**이 이상적!
+2. JdbcContext가 DI를 통해 다른 빈에 의존하고 있기 때문.
+   - JdbcContext는 dataSource property를 통해 DataSource 오브젝트를 주입받도록 되어있음.
+   - DI를 위해서는 주입되거나, 주입받는 오브젝트 모두 스프링 빈으로 등록되어 있어야 함!
+   - JdbcContext는 다른 빈을 DI 받기 위해서라도 스프링 빈으로 등록돼야 함.
+
+<br>
+
+실제로 스프링에서는 클래스를 직접 의존하는 DI가 등장하는 경우도 있음.
+
+중요한 것은 인터페이스의 사용 여부! <br>
+→ 왜 인터페이스를 사용하지 않았을까?
+
+인터페이스가 없다는 것 = UserDao가 JdbcContext가 매우 긴밀한 관계를 맺었다는 것.
+
+- 만약 JDBC가 아닌 JPA나 하이버네이트 같은 ORM을 사용해야 한다면? <br>
+  → **JdbcContext도 통째로 바뀌어야 함.**
+- JdbcContext는 테스트에서도 다른 구현으로 대체해서 사용할 이유가 없음.
+
+위 경우에는 굳이 인터페이스를 두지 말고 강력한 결합을 가진 관계를 허용해도 됨.
+
+#### 코드를 이용하는 수동 DI
+
+JdbcContext를 UserDao에 DI 하는 대신 UserDao 내부에서 직접 DI를 적용하는 방법도 존재한다.
+
+- 대신 JdbcContext를 싱글톤으로 만들려는 것은 포기해야 한다.
+  - DAO 하나마다 하나씩의 JdbcContext 오브젝트를 가지고 있겠다는 것!
+
+DAO 개수만큼 JdbcContext 오브젝트가 필요하겠지만, 그정도는 메모리에 주는 부담이 거의 없음.
+
+- 또한 자주 만들어졌다가 제거되는 것도 아니기에 GC(garbage collector)에 대한 부담도 없음.
+
+<br>
+
+JdbcContext를 빈으로 등록하지 않았기에, JdbcContext의 생성과 초기화의 제어권은 UserDao가 가진다.
+
+남은 문제는 JdbcContext가 다른 빈(DataSource)을 인터페이스를 통해 간접적으로 의존하고 있다는 점이다.
+
+- 이 경우에는 UserDao에 JdbcContext의 DataSoucre DI까지 맡겨서 해결한다.
+- UserDao가 임시로 DI 컨테이너처럼 동작하게 만드는 것!
+
+<br>
+
+→ JdbcContext에 주입해줄 의존 오브젝트인 DataSource는 UserDao가 대신 DI 받도록 하면 됨.
+
+- UserDao는 직접 DataSource 빈을 필요로 하지 않지만, JdbcContext에 주입해주기 위한 용도로 제공받는 것!
+
+<img width="900" src="./img/week3/jdbc-context_by-code.PNG">
+
+<br>
+
+1. 스프링 설정파일에 userDao와 dataSource 두 개만 빈으로 정의한다.
+2. userDao 빈에 DataSource 타입 프로퍼티를 지정하여 dataSource 빈을 주입받는다.
+3. UserDao는 JdbcContext 오브젝트를 만들면서 DI 받은 DataSource 오브젝트를 JdbcContext의 수정자 메소드로 주입해준다.
+4. 만들어진 JdbcContext의 오브젝트는 UserDao의 인스턴스 변수에 저장해두고 사용한다.
+
+```java
+public class UserDao {
+    ...
+    private JdbcContext jdbcContext;
+
+    /**
+     * 수정자 메소드이면서 JdbcContext에 대한 생성, DI 작업을 도잇에 수행함.
+    **/
+    public void setDataSource(DataSource dataSource) {
+        // IoC: JdbcContext 생성
+        this.jdbcContext = new JdbcContext();
+
+        // 의존 오브젝트 주입
+        this.jdbcContext.setDataSource(dataSource);
+        this.dataSource = dataSource;
+    }
+}
+```
+
+여기서 `setDataSource()` 메소드는 DI 컨테이너가 DataSource 오브젝트를 주입해줄 때 호출됨.
+
+- 이때 JdbcContext에 대한 수동 DI 작업을 진행하면 된다!
+
+먼저 JdbcContext의 오브젝트를 만들어서 인스턴스 변수에 저장해두고, JdbcContext에 UserDao가 DI받은 DataSource 오브젝트를 주입해주면 완벽한 DI 작업이 완료된다.
+
+<br>
+
+이 방법의 **장점**?
+
+굳이 인터페이스를 두지 않아도 될 만큼 긴밀한 관계를 갖는 클래스들(UserDao와 JdbcContext)을 어색하게 따로 빈으로 만들지 않고 내부에서 직접 만들어 사용하면서도 다른 오브젝트에 대한 DI를 적용할 수 있다는 것!!
 
 ## 🌿 템플릿과 콜백
 
+**복잡하지만 바뀌지 않는 일정한 패턴을 갖는 작업 흐름이 존재하고 그중 일부분만 바꿔서 사용해야 하는 경우**에 위와 같이 전략 패턴을 사용한다.
+
+- 추가적으로 전략 패턴의 기본 구조에 익명 내부 클래스까지 활용하였음.
+
+이런 방식을 스프링에서는 **템플릿/콜백 패턴**이라고 부른다.
+
+- 전략 패턴의 컨텍스트 = **템플릿**
+  - 어떤 목적을 위해 미리 만들어둔 모양이 있는 틀.
+  - 템플릿 메소드 패턴은 고정된 틀의 로직을 가진 패턴을 템플릿 메소드를 슈퍼 클래스에 두고, 바뀌는 부분을 서브클래스의 메소드에 두는 구조로 이루어진다.
+- 익명 내부 클래스로 만들어지는 오브젝트 = **콜백**
+  - 콜백? 실행되는 것을 목적으로 다른 오브젝트의 메소드에 전달되는 오브젝트.
+
 ### 🌱 템플릿/콜백의 동작원리
+
+- 템플릿: 고정된 작업 흐름을 가진 크드를 재사용한다!
+- 콜백: 템플릿 안에서 호출되는 것을 목적으로 만들어진 오브젝트
+
+#### 템플릿/콜백의 특징
+
+전략 패턴과 달리 콜백은 보통 단일 메소드 인터페이스를 사용함.
+
+- 템플릿의 작업 흐름 중 특정 기능을 위해 한 번 호출되는 경우가 일반적이기 때문.
+
+콜백은 일반적으로 하나의 메소드를 가진 인터페이스를 구현한 익명 내부 클래스로 만들어진다!
+
+<Br>
+
+콜백 인터페이스 메소드에는 보통 파라미터가 존재함.
+
+- 위의 JdbcContext 에서는 템플릿인 workWithStatementStrategy() 메소드 내에서 생성한 Connection 오브젝트를 콜백의 메소드인 makePreparedStatement()를 실행할 때 파라미터로 넘겨줌.
+
+```java
+public class JdbcContext {
+	DataSource dataSource;
+
+	public void setDataSource(DataSource dataSource) {
+		this.dataSource = dataSource;
+	}
+
+	public void workWithStatementStrategy(StatementStrategy stmt) throws SQLException {
+		Connection c = null;
+		PreparedStatement ps = null;
+
+		try {
+            // 여기서 JdbcContext가 Connection 오브젝트를 생성함.
+			c = dataSource.getConnection();
+
+            // 파라미터 - 콜백(Statement Strategy 오브젝트)의 메소드를 실행할 때 Connection 오브젝트를 전달함.
+			ps = stmt.makePreparedStatement(c);
+
+			ps.executeUpdate();
+		} catch (SQLException e) {
+			throw e;
+		} finally {
+			if (ps != null) { try { ps.close(); } catch (SQLException e) {} }
+			if (c != null) { try {c.close(); } catch (SQLException e) {} }
+		}
+	}
+}
+```
+
+```java
+public class UserDao {
+	private DataSource dataSource;
+
+	public void setDataSource(DataSource dataSource) {
+		this.jdbcContext = new JdbcContext();
+		this.jdbcContext.setDataSource(dataSource);
+
+		this.dataSource = dataSource;
+	}
+
+	private JdbcContext jdbcContext;
+
+	public void add(final User user) throws SQLException {
+		this.jdbcContext.workWithStatementStrategy(
+                // 여기서는 StatementStrategy = 콜백!
+                // 하나의 메소드(makePreparedStatement())를 가진 인터페이스(StatementStrategy)를 구현한 익명 내부 클래스
+				new StatementStrategy() {
+					public PreparedStatement makePreparedStatement(Connection c)
+                      throws SQLException {
+						PreparedStatement ps =
+							c.prepareStatement("insert into users(id, name, password) values(?,?,?)");
+						ps.setString(1, user.getId());
+						ps.setString(2, user.getName());
+						ps.setString(3, user.getPassword());
+
+						return ps;
+					}
+				}
+		);
+	}
+
+    ...
+```
+
+<br>
+
+<img width="900" src="./img/week3/template-callback_workflow.PNG">
+
+- 클라이언트: 템플릿 안에서 실행될 로직을 담은 콜백 오브젝트를 만들고, 콜백이 참조할 정보를 제공함. <br>
+  만들어진 콜백은 클라이언트가 템플릿의 메소드를 호출할 때 파라미터로 전달됨.
+  - 위 코드에서는 클라이언트가 UserDao! <br>
+    실행될 로직을 담은 콜백 오브젝트인 StatementStrategy 오브젝트를 생성(구현)함.
+  - 템플릿(JdbcContext)의 메소드(`workWithStatementStrategy()`)를 호출할 때 이 콜백이 파라미터로 전달됨.
+- 템플릿은 정해진 작업 흐름을 따라 작업을 진행하다가 내부에서 생성한 참조정보를 가지고 콜백 오브젝트의 메소드를 호출함.<br>
+  콜백은 클라이언트 메소드에 있는 정보와 템플릿이 제공한 참조정보를 이용하여 작업을 수행하고 그 결과를 다시 템플릿에 돌려줌.
+
+  - 위 코드에서는 템플릿이 JdbcContext임. <br>
+    workWithStatementStrategy() 에 정의된 순서대로 작업을 진행하다가, <br>
+    내부에서 생성한 참조정보(dataSource Connection)을 통해 콜백의 메소드(`makePreparedStatement()`)를 호출함.
+  - 콜백(StatementStrategy)은 이를 통해 makePreparedStatement() 작업을 수행하고 그 결과를 템플릿에 돌려줌. (아래 코드 참고)
+    ```java
+    ps = stmt.makePreparedStatement(c);
+    ```
+
+- 템플릿은 콜백이 돌려준 정보를 사용하여 작업을 마저 수행함. 경우에 따라 최종 결과를 클라이언트에 다시 돌려주기도 함.
+
+<br>
+
+> **너무 헷갈려서 정리한 이미지** <img width="100%" src="./img/week3/template-callback_note.PNG">
+
+- DI 방식의 전략 패턴 구조라고 생각해보면 간단함!
+
+클라이언트가 템플릿 메소드를 호출하면서 콜백 오브젝트를 전달하는 것은 메소드 레벨에서 일어나는 DI.
+
+템플릿이 사용할 콜백 인터페이스를 구현한 오브젝트를 메소드를 통해 주입해주는 DI 작업이 클라이언트가 템플릿의 기능을 호출하는 것과 동시에 일어남.
+
+- 템플릿의 workWithStatementStrategy() 메소드에 구현한 StatementStrategy 오브젝트를 바로 넣어줌.
+
+<br>
+
+> 일반적인 DI는 템플릿에 인스턴스 변수를 만들어 의존 오브젝트를 수정자로 받는 방식을 사용함.
+
+템플릿/콜백 방식에서는 매번 **메소드 단위로 사용할 오브젝트를 새롭게 전달** 받음.
+
+- 콜백 오브젝트가 내부 클래스로서 자신을 생성한 클라이언트 메소드 내의 정보를 직접 참조하는 것 역시도 템플릿/콜백 방식의 고유한 특징
+  - 위 코드에서는 클라이언트 메소드 `add()`의 로컬 변수인 User 정보를 직접 참조하였음.
+- 클라이언트와 콜백이 강하게 결합하는 것!
+
+<br>
+
+클라이언트 콜백 방식 <br>
+= "전략 패턴의 장점 + DI의 장점 + 익명 내부 클래스 사용 전략"의 결합
+
+#### JdbcContext에 적용된 템플릿/콜백
+
+- 템플릿과 클라이언트가 메소드 단위인 것이 특징임.
+
+> 위에 정리해놓은 필기 이미지와 함께 보도록 하자!
+
+<img width="900" src="./img/week3/template-callback_in_book-ex.PNG">
 
 ### 🌱 편리한 콜백의 재활용
 
