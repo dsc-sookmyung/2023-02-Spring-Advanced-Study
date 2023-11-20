@@ -1,4 +1,4 @@
-# 3장 템플릿
+![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/cbca6388-fee3-4c8a-851e-7cc04b312476)# 3장 템플릿
 
 개방 폐쇄 원칙(OCP)은 확장에는 자유롭게 열려 있고 변경에는 굳게 닫혀 있다는 객체지향 설계의 핵심 원칙이다. 템플릿이란 바뀌는 성질이 다른 코드 중에서 변경이 거의 일어나지 않으며 일정한 패턴으로 유지되는 특성을 가진 부분을 자유롭게 변경되는 성질을 가진 부분으로부터 독립시켜서 효과적으로 활용할 수 있도록 하는 방법이다.
 
@@ -8,7 +8,7 @@
 - DB 풀은 매번 getConnection()으로 가져간 커넥션을 명시적으로 close()해서 돌려줘야지만 다시 풀에 넣었다가 다음 커넥션 요청이 있을 때 재사용할 수 있다.
 - 그런데 예외처리가 이뤄지지 못하고 미처 반환되지 못한 Connection이 계속 쌓이면 어느 순간 리소스가 모자란다는 심각한 오류와 함께 서버가 중단될 수 있다.
 
-→ 예외 상황에서도 리소스를 제대로 반환할 수 있도록 try/catch/finally를 적용하자.
+▶️ 예외 상황에서도 리소스를 제대로 반환할 수 있도록 try/catch/finally를 적용하자.
 
 ```java
 public void deleteAll() throws SQLException {
@@ -40,11 +40,11 @@ public void deleteAll() throws SQLException {
 
 ### JDBC try/catch/finally 코드의 문제점
 
-복잡한 try/catch/finally 블록이 2중으로 중첩까지 되어 나오는데다, 모든 메소드마다 반복된다.
+- 복잡한 try/catch/finally 블록이 2중으로 중첩까지 되어 나오는데다, 모든 메소드마다 반복된다.
 
-복붙 → 서비스 중단 → 세계 멸망
+- 복붙 → 서비스 중단 → 세계 멸망 💥
 
-이 문제의 핵심은 변하지 않는, 그러나 많은 곳에서 중복되는 코드와 로직에 따라 자꾸 확장되고 자주 변하는 코드를 잘 분리해내는 작업이다.
+- 이 문제의 핵심은 변하지 않는, 그러나 많은 곳에서 중복되는 코드와 로직에 따라 자꾸 확장되고 자주 변하는 코드를 잘 분리해내는 작업이다.
 
 ### 분리와 재사용을 위한 디자인 패턴 적용
 
@@ -71,13 +71,14 @@ public void deleteAll() throws SQLException {
     
 - 템플릿 메소드 패턴의 적용
     
-    > 💡 템플릿 메소드 패턴
+    > 💡 **템플릿 메소드 패턴**<br/>
     상속을 통해 기능을 확장해서 사용한다. 변하지 않는 부분은 슈퍼클래스에 두고 변하는 부분은 추상 메소드로 정의해서 서브클래스에서 오버라이드하여 새롭게 정의해 쓰도록 한다.
     > 
     - 하지만 템플릿 메소드 패턴으로의 접근은 제한이 많다. DAO 로직마다 상속을 통해 새로운 클래스를 만들어야 한다. 또 확장구조가 이미 클래스를 설계하는 시점에서 고정된다. 상속을 통해 확장을 꾀하는 템플릿 메소드 패턴의 단점이 그대로 드러난다.
 - 전략 패턴의 적용
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/b1bac81a-f300-4d1e-9ec0-f8abfb583ff9/Untitled.png)
+    ![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/f69028ca-954c-4375-9b79-497b757ab815)
+
     
     - 좌측에 있는 Context의 contextMethod()에서 일정한 구조를 가지고 동작하다가 특정 확장 기능은 Strategy 인터페이스를 통해 외부의 독립된 전략 클래스에 위임한다.
     
@@ -97,7 +98,8 @@ public void deleteAll() throws SQLException {
     
 - DI 적용을 위한 클라이언트 컨텍스트 분리
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/8e72dc67-41c1-4874-97e6-5b7a25bc3dc8/Untitled.png)
+    ![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/a12640c4-683c-49c0-864a-de0f24a7a02e)
+
     
     - 중요한 것은 이 컨텍스트에 해당하는 JDBC try/catch/finally 코드를 클라이언트 코드인 StatementStrategy를 만드는 부분에서 독립시켜야 한다는 점이다.
     
@@ -183,7 +185,7 @@ public void deleteAll() throws SQLException {
 
 jdbcContextWithStetementStrategy()는 다른 DAO에서도 사용 가능하다. UserDao 클래스 밖으로 독립시키자.
 
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/2a085732-6d4a-4ec1-a259-eb85bc72d4db/Untitled.png)
+![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/6755d153-6371-4c36-87a9-3543125aaf5f)
 
 ### JdbcContext의 특별한 DI
 
@@ -203,7 +205,8 @@ UserDao와 JdbcContext 사이에는 인터페이스를 사용하지 않고 DI를
         
 - 코드를 이용하는 수동 DI
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/daa39621-a204-4b71-97aa-92be949f6712/Untitled.png)
+    <img width="323" alt="image" src="https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/be7338c8-6f79-4f61-997b-971dd4bea636">
+
     
     - JdbcContext의 생성과 초기화 → UserDao
     - DataSource 빈의 의존 → UserDao가 주입받아 제공
@@ -214,13 +217,13 @@ UserDao와 JdbcContext 사이에는 인터페이스를 사용하지 않고 DI를
 
 ## 3.5 템플릿과 콜백
 
-> 💡 템플릿 (template)
+> 💡 **템플릿 (template)**
 > 
 > 
 > 어떤 목적을 위해 미리 만들어둔 모양이 있는 틀을 가리킨다. 프로그래밍에서는 고정된 틀 안에 바꿀 수 있는 부분을 넣어서 사용하는 경우에 템플릿이라고 부른다. 템플릿 메소드 패턴은 고정된 틀의 로직을 가진 템플릿 메소드를 슈퍼클래스에 두고, 바뀌는 부분을 서브클래스 메소드에 두는 구조로 이뤄진다.
 > 
 
-> 💡 콜백 (callback)
+> 💡 **콜백 (callback)**<br/>
  실행되는 것을 목적으로 다른 오브젝트의 메소드에 전달되는 오브젝트를 말한다. 파라미터로 전달되지만 값을 참조하기 위한 것이 아니라 특정 로직을 담은 메소드를 실행시키기 위해 사용한다. 자바에선 메소드 자체를 파라미터로 전달할 방법은 없기 때문에 메소가 담긴 오브젝트를 전달해야 한다. 그래서 펑셔널 오브젝트(functional object)라고도 한다.
 > 
 
@@ -228,7 +231,8 @@ UserDao와 JdbcContext 사이에는 인터페이스를 사용하지 않고 DI를
 
 템플릿/콜백 패턴의 콜백은 보통 단일 메소드 인터페이스를 사용한다.
 
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/7c7bccd5-4d6d-42ab-8530-85446e67ca96/Untitled.png)
+![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/a9a43846-d8de-42b5-968a-fbd1c491876a)
+
 
 - 클라이언트의 역할은 템플릿 안에서 실행될 로직을 담은 콜백 오브젝트를 만들고, 콜백이 참조할 정보를 제공하는 것이다. 만들어진 콜백은 클라이언트가 템플릿의 메소드를 호출할 때 파라미터로 전달된다.
 - 템플릿은 정해진 작업 흐름을 따라 작업을 진행하다가 내부에서 생성한 참조정보를 가지고 콜백 오브젝트의 메소드를 호출한다. 콜백은 클라이언트 메소드에 있는 정보와 템플릿이 제공한 참조정보를 이용해서 작업을 수행하고 그 결과를 다시 템플릿에 돌려준다,
@@ -271,7 +275,8 @@ UserDao와 JdbcContext 사이에는 인터페이스를 사용하지 않고 DI를
     
     UserDao만 사용하기에는 아까운 executeSql을 JdbcContext 안으로 옮기자.
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/f2998362-f283-4055-9d40-ce68bb1c3cc6/Untitled.png)
+    ![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/961c6300-14c9-45d9-a884-2ddfc3380f42)
+
     
     - 결국 JdbcContext 안에 클라이언트와 템플릿, 콜백이 모두 함께 공존하여 동작하는 구조가 되었다.
     - 일반적으로 성격이 다른 코드들은 가능한 한 분리하는 것이 낫지만, 이 경우는 하나의 목적을 위해 서로 긴밀하게 연관되어 동작하는 응집력이 강한 코드들이기 때문에 한 군데 모여있는 것이 유리하다.
