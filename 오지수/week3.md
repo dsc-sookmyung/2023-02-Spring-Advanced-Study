@@ -1025,16 +1025,648 @@ public class UserDao {
 
 ### 🌱 편리한 콜백의 재활용
 
+아직까지 한 가지 아쉬운 점이 있다.
+
+- DAO 메소드에서 매번 익명 내부 클래스를 사용하기 때문에 상대적으로 코드를 작성하고 읽기가 조금 불편하다는 점이다!
+
+#### 콜백의 분리와 재활용
+
+복잡한 익명 내부 클래스의 사용을 최소화할 수 있는 방법을 찾아보자.
+
+콜백 오브젝트 구조를 다시 살펴보면
+
+- 콜백 클래스 정의와 오브젝트 생성 부분은 변하지 않고,
+- SQL 문장만 변하는 것을 확인할 수 있다.
+
+```java
+public void deleteAll() throws SQLException {
+    this.jdbcContext.workWithStatementStrategy(
+        new StatementStrategy() {
+            public PreparedStatement makePreparedStatement(Connection c)
+                    throws SQLException {
+                // "delete from users" 라는 문자열만 바뀐다!
+                return c.prepareStatement("delete from users");
+            }
+        }
+    );
+}
+```
+
+<br>
+따라서 중복되는 부분은 따로 분리해보자.
+
+단순 SQL을 필요로하는 콜백이라면 바뀌는 SQL 문자열을 제외하고 나머지는 매번 동일할 것이다.
+
+- 바뀌지 않는 모든 부분을 executeSQL() 메소드로 만들어냄.
+
+```java
+public void deleteAll() throws SQLException {
+    executeSQL("delete from users"); // 변하는 SQL 문장을 파라미터로 전달.
+}
+
+public void executeSQL(final String query) throws SQLException {
+    this.jdbcContext.workWithStatementStrategy(
+        new StatementStrategy() {
+            public PreparedStatement makePreparedStatement(Connection c)
+                    throws SQLException {
+                // 바뀌는 문자열을 query 파라미터로 받는다!
+                return c.prepareStatement(query);
+            }
+        }
+    );
+}
+
+```
+
+#### 콜백과 템플릿의 결합
+
+한 단계 더 나아가보자. executeSQL() 메소드는 UserDao만 사용하기에는 아깝다.
+
+이렇게 재사용 가능한 콜백을 담고 있는 메소드는 DAO가 공유하는 템플릿 클래스로 옮기는 게 더 합리적이다!
+
+엄밀히 말하면 "템플릿"은 JdbcContext가 아닌, `workWithStatementStrategy()` 메소드이기에, **JdbcContext 클래스로 콜백 생성 및 템플릿 호출이 담긴 executeSQL() 메소드를 옮긴다고 해도 문제될 것은 없다!**
+
+```java
+public class JdbcContext {
+    ...
+
+    public void executeSQL(final String query) throws SQLException {
+        workWithStatementStrategy(
+            new StatementStrategy() {
+                public PreparedStatement makePreparedStatement(Connection c)
+                        throws SQLException {
+                    return c.prepareStatement(query);
+                }
+            }
+        );
+    }
+}
+
+// UserDao 클래스도 다음과 같이 변경해준다.
+public class UserDao {
+    private Jdbc Template jdbcTemplate;
+
+    public void deleteAll() throws SQLException {
+		this.jdbcTemplate.update("delete from users");
+	}
+
+    ...
+}
+
+```
+
+따라서 이렇게 코드를 변경하면 JdbcContext 안에 클라이언트와 템플릿, 콜백이 모두 공존하며 동작하는 구조가 된다.
+
+- `add()` 에도 같은 방법을 적용할 수 있다.
+  - 여기서의 콜백은 SQL 문장과 함께 PreparedStatement에 바인딩될 파라미터 내용이 추가되어야 한다.
+  - 여기서 파라미터 개수가 일정하지 않기 때문에 자바 5 가변인자로 정의해두면 편리하게 사용 가능하다.
+
 ### 🌱 템플릿/콜백의 응용
+
+템플릿/콜백 패턴은 사실 스프링이 제공해주는 독점적인 기술이 아님
+
+- 하지만 스프링에서 이 패턴을 적극적으로 활용하고 있는 것!
+
+DI도 순수한 스프링의 기술은 아니지만, 스프링에서 이를 편리하게 사용할 수 있도록 도와주는 컨테이너를 제공하고, 사용 방법을 지지해주는 것.
+
+따라서 스프링이 제공하는 템플릿/콜백 기능을 명확히 알고 직접 만들어서 사용할 줄도 알아야 함.
+
+<br>
+
+고정된 작업 흐름을 갖고 있으면서 여기저기서 자주 반복되는 코드가 있다면 중복되는 코드를 분리할 방법을 생각해보는 습관을 기르자.
+
+1. 중복된 코드는 메소드로 분리해보고,
+2. 일부 작업을 바꾸어 사용해야 한다면 인터페이스를 사이에 두고 분리하여 전략 패턴을 적용하고 DI로 의존관계를 관리하도록 만든다.
+3. 만약 바뀌는 부분이 한 애플리케이션 안에서 동시에 여러 종류가 만들어질 수 있다면 템플릿/콜백 패턴 적용을 고려한다.
+
+#### 테스트와 try/catch/finally
+
+만약 계산기 클래스를 만들 때, 파일을 읽어서 처리하는 비슷한 기능이 새로 필요하다고 가정해보자.
+
+먼저 템플릿/콜백 패턴을 적용해보자.
+
+1. 템플릿에 담을 반복되는 작업 흐름은 어떤 것인가?
+2. 템플릿이 콜백에게 전달해줄 내부의 정보는 무엇인가?
+3. 콜백이 템플릿에게 돌려줄 내용은 무엇인가?
+4. 템플릿이 작업을 마친 뒤 클라이언트에게 돌려줄 내용은 무엇인가?
+
+> 템플릿/콜백을 정할 때는 템플릿과 콜백의 경계를 정하고, <br>
+> 템플릿이 콜백에게, 콜백이 템플릿에게 각각 전달되는 내용이 무엇인지 파악하는 것이 굉장히 중요하다.
+
+<Br>
+
+먼저 가장 쉽게 생각할 수 있는 구조는?
+
+- BufferedReader를 만들어 콜백에게 전달 <br>
+  -> 콜백이 각 라인을 읽어서 처리 후 결과를 템플릿에게 돌려주는 것!
+
+```java
+public interface BufferedReaderCallBack {
+    Integer doSomethingWithReader(BufferedReader br) throws IOException;
+}
+```
+
+이제 템플릿 부분을 메소드로 분리하자.
+
+```java
+public Integer fileReadTemplate(String filepath, BufferedReaderCallBack callback)
+  throws IOException {
+    BufferedReader br = null;
+    try {
+        br = new BufferedReader(new FileReader(filepath));
+        int ret = callback.doSomethingWithReader(br);
+        return ret;
+    } catch (IOException e) {
+        System.out.println(e.getMessage());
+        throw e;
+    } finally {
+        if (br != null) {
+            try { br.close(); }
+            catch (IOException e) {
+                System.out.println(e.getMessage());
+            }
+        }
+    }
+  }
+```
+
+- BufferedReader를 만들어 넘겨주는 것, 등등 번거로운 작업을 템플릿에서 처리함.
+- 준비된 BufferedReader를 통해 작업 수행은 콜백을 호출해서 처리하도록 만듦.
+
+이렇게 준비된 템플릿 메소드를 사용하도록 계산기 메소드를 수정해본다면?
+
+```java
+public Integer calcSum(String filepath) throws IOException {
+    BufferedReaderCallBack sumCallback =
+        new BufferedReaderCallBack() {
+            public Integer doSomethingWithReader(br) throws IOException {
+                Integer sum = 0;
+                String line = null;
+                while ((line = br.readLine()) != null) {
+                    sum += Integer.valueOf(line);
+                }
+                return sum;
+            }
+        };
+    return fileReadTemplate(filepath, sumCallback);
+}
+```
+
+#### 템플릿/콜백의 재설계
+
+아직까지도 계산기 클래스의 메소드들이 많은 부분에서 중복된다.
+
+- calcSum() 메소드
+
+```java
+Integer sum = 0;
+String line = null;
+while((line = br.readLine()) != null) {
+    sum += Integer.valueOf(line); // 이 라인만 바뀜
+}
+return sum
+```
+
+<br>
+
+- calcMultiply() 메소드
+
+```java
+Integer multifly = 1;
+String line = null;
+while((line = br.readLine()) != null) {
+    multifly *= Integer.valueOf(line); // 이 라인만 제외하고 전부 중복코드
+}
+return sum
+```
+
+<br>
+
+템플릿과 콜백을 찾아낼 때는 변하는 코드의 경계를 찾고 그 경계를 사이에 두고 주고받는 일정한 정보가 있는지 확인하면 된다.
+
+위 두 메소드에서 바뀌는 코드는 실제로 네번째 줄뿐임.
+
+앞에서 **네 번째 라인으로 전달되는 정보는 처음에 선언한 변수 값인 multifly 또는 sum**임.
+
+그 네 번째 라인을 처리하고 다시 외부로 전달되는 것? <br>
+multifly or sum과 각 라인의 숫자 값을 가지고 계산한 결과다!
+
+```java
+public interface LineCallback {
+    Integer doSomethingWithLine(String line, Integer value);
+}
+```
+
+이렇게 새로 만든 LineCallback 인터페이스를 경계로 만든 새로운 계산 결과를 리턴 값을 통해 다시 전달받는다.
+
+```java
+public Integer lineReadTemplate(String filepath, LineCallback callback, int initVal) throws IOException {
+    BufferedReader br = null;
+
+    try {
+        br = new BufferedReader(new FileReader(filepath));
+        Integer res = initVal;
+        String line = null;
+        while((line = br.readLine()) != null) {
+            res = callback.doSomethingWithLine(line, res);
+        }
+        return res;
+    } catch (IOException e) {
+        ...
+    } finally {
+        ...
+    }
+}
+```
+
+<br>
+
+- 위의 lineReadTemplate()을 사용하도록 calcSum(), calcMultiply() 메소드를 고쳐준다.
+
+```java
+public Integer calcSum(String filepath) throws IOException {
+    LineCallback sumCallback =
+        new LineCallBack() {
+            public Integer doSomethingWithLine(String line, Integer value) {
+                return value + Integer.valueOf(line);
+            }
+        };
+    return lineReadTemplate(filepath, sumCallback, 0);
+}
+
+public Integer calcMultiply(String filepath) throws IOException {
+    LineCallback multiplyCallback =
+        new LineCallBack() {
+            public Integer doSomethingWithLine(String line, Integer value) {
+                return value * Integer.valueOf(line);
+            }
+        };
+    return lineReadTemplate(filepath, sumCallback, 0);
+}
+```
+
+#### 제네릭스를 이용한 콜백 인터페이스
+
+만약 파일을 라인 단위로 처리해서 만드는 결과의 타입을 다양하게 가져가고 싶다면, 자바 언어의 Generics 제네릭스를 이용하면 된다.
+
+파일의 각 라인에 있는 문자를 모두 연결해서 하나의 스트링으로 돌려주는 기능을 만든다고 생각해보자.
+
+- 결과 값이 String 이어야 하므로, 정수값 뿐 만 아닌 문자열도 처리할 수 있도록 확장해보자.
+
+```java
+public interface LineCallback<T> {
+    T doSomethingWithLine(String line, T value);
+}
+```
+
+<br>
+
+- 템플릿인 lineReadTemplate() 메소드 역시도 타입 파라미터를 사용해 제네릭 메소드로 만들어준다.
+- 콜백의 타입 파라미터와 초기값인 initVal의 타입, 템플릿의 결과 값 타입을 모두 동일하게 선언해야 한다.
+
+```java
+public <T> T lineReadTemplate(String filepath, LineCallback<T> callback, T initVal) throws IOException {
+    BufferedReader br = null;
+
+    try {
+        br = new BufferedReader(new FileReader(filepath));
+        T res = initVal;
+        String line = null;
+        while((line = br.readLine()) != null) {
+            res = callback.doSomethingWithLine(line, res);
+        }
+        return res;
+    } catch (IOException e) {
+        ...
+    } finally {
+        ...
+    }
+}
+```
+
+따라서 Integer에 타입이 한정된 메소드가 아닌 다양한 타입을 받을 수 있게 되었다.
+
+이제 파일의 모든 내용을 하나의 문자열로 길게 연결하는 기능을 가진 메소드를 추가해보면?
+
+- T type을 String으로 지정하여 익명 클래스를 구현해줌.
+
+```java
+public String concatenate(String filepath) throws IOException {
+    LineCallback<String> concatenameCallback =
+        new LineCallback<String>() {
+            public String doSomethingWithLine(String line, String value) {
+                return value + line;
+            }
+        };
+
+    return lineReadTemplate(filepath, concatenateCallback, "");
+}
+```
+
+<br>
+
+이렇게 범용적으로 만들어진 템플릿/콜백을 이용하면 파일을 라인 단위로 처리하는 다양한 기능을 편리하게 만들 수 있다.
+
+새롭게 살펴본
+
+1. **리턴 값을 갖는 템플릿**이나
+2. **템플릿 내에서 여러 번 호출되는 콜백 오브젝트**,
+3. **제네릭스 타입을 갖는 메소드나 콜백 인터페이스 등의 기법**은
+
+스프링의 템플릿/콜백 패턴이 적용된 곳에서 종종 사용되고 있음.
 
 ## 🌿 스프링의 JDBC TEMPLATE
 
+스프링이 제공하는 템플릿/콜백 기술을 살펴보자.
+
+스프링은 JDBC를 이용하는 DAO에서 사용할 수 있도록 준비된 다양한 템플릿과 콜백을 제공한다.
+
+- 스프링이 제공하는 JDBC 코드용 기본 템플릿 = JdbcTemplate
+
+다음과 같이 UserDao의 코드를 수정하자.
+
+```java
+public class UserDao {
+    ...
+    private JdbcTemplate jdbcTemplate;
+
+    public void setDataSource(DataSource dataSource) {
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
+
+        this.dataSource = dataSource;
+    }
+}
+```
+
 ### 🌱 update()
+
+deleteAll() 에 먼저 적용해보자.
+
+기존의 `deleteAll()`은 StatementStrategy 인터페이스의 `makePreparedStatment()` 메소드를 콜백으로 적용함.
+
+- 이에 대응하는 JdbcTemplate의 콜백은 PreparedStatementCreator 인터페이스의 `createPreparedStatment()` 메소드임.
+
+```java
+public void deleteAll() {
+    this.jdbcTemplate.update(
+        new PreparedStatementCreator() {
+            public PreparedStatement createPreparedStatement(Connection con) throws SQLException {
+                return con.prepareStatement("delete from users");
+            }
+        }
+    )
+}
+```
+
+<br>
+
+앞에서 만들었던 `execureSql()`?
+
+- SQL 문장만 전달하면 미리 준비된 콜백을 만들어서 템플릿을 호출하는 것까지 한 번에 해주는 편리한 메소드.
+- JdbcTemplate 에서도 기능이 비슷한 메소드가 존재함.
+
+<br>
+
+내장 콜백을 사용하는 메소드를 호출하도록 수정함.
+
+```java
+public void deleteAll() {
+    this.jdbcTemplate.update("delete from users");
+}
+```
+
+<br>
+
+JdbcTemplate은 앞에서 구상만 해보고 만들지는 못했던 add() 메소드에 대한 편리한 메소드도 제공함.
+
+치환자를 가진 SQL로 PreparedStatement를 만들고 함께 제공하는 파라미터를 순서대로 바인딩해주는 기능을 가진 update() 메소드를 사용할 수 있다.
+
+- SQL과 함께 가변인자로 선언된 파라미터를 제공해주면 된다.
+
+```java
+PreparedStatement ps =
+    c.prepareStatement("insert into users(id, name, password) values (?,?,?)");
+
+ps.setString(1, user.getId());
+ps.setString(2, user.getName());
+ps.setString(3, user.getPassword());
+```
 
 ### 🌱 queryForInt()
 
+아직 템플릿/콜백 방식을 적용하지 않았던 메소드에 JdbcTemplate을 적용해보자.
+
+- `getCount()`: SQL 쿼리를 실행하고 ResultSet을 통해 결과 값을 가져오는 코드.
+  - 이런 코드에서 사용 가능한 템플릿은 **PreparedStatementCreator** 콜백과 **ResultSetExtractor** 콜백을 파라미터로 받는 `query()` 메소드.
+  - ResultSetExtractor 콜백은 텐플릿이 제공하는 ResultSet을 이용해 원하는 값을 추출해서 템플릿에 전달하면, 템플릿은 나머지 작업을 수행한 뒤에 그 값을 query() 메소드의 리턴 값으로 돌려줌.
+
+```java
+public int getCount() {
+    return this.jdbcTemplate.query(
+        // 첫 번째 콜백: Statement 생성
+        new PreparedStatementCreator(){
+            public PreparedStatement createPreparedStatement(Connection con) throws SQLException {
+                return con.prepareStatement("select count (*) from users");
+            }
+        },
+        // 두 번째 콜백, ResultSet으로부터 값 추출
+        new ResultSetExtractor<Integer>() {
+            public Integer extractData(ResultSet rs) throws     SQLException, DataAccessException {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    );
+}
+```
+
+<br>
+
+`queryForInt()` 를 사용하도록 `getCount()`를 다음과 같이 수정할 수도 있다.
+
+```java
+public int getCount() {
+    return this.jdbcTemplate.queryForInt("select count(*) from users");
+}
+```
+
 ### 🌱 queryForObject()
+
+이번엔 get() 메소드에 JdbcTemplate을 적용해보자.
+
+- SQL은 바인딩이 필요한 치환자를 가지고 있다.
+- ResultSet에서 getCount() 와 같은 단순한 오브젝트가 아닌 복잡한 User 오브젝트로 가져와야 한다.
+
+```java
+public User get(String id) {
+    return this.jdbcTemplate.queryForObject("select * from users where id = ?",
+
+        // SQL에 바인딩할 파라미터 값. (가변인자 대신 배열 사용)
+        new Object[] {id},
+
+        // ResultSet한 row의 결과를 Object에 매핑해주는 RowMapper
+        new RowMapper<User> {
+            public User mapRow(ResultSet rs, int rowNUum) throws SQLExcpetion {
+                User user = new User();
+                user.setId(rs.getString("id"));
+                user.setName(rs.getString("name"));
+                user.setPassword(rs.getString("password"));
+                return user;
+            }
+        }
+    )
+}
+```
 
 ### 🌱 query()
 
+#### 기능 정의와 테스트 작성
+
+RowMapper 에 현재 등록되어 있는 모든 사용자 정보를 가져오는 getAll() 메소드를 추가해보자.
+
+- 즉 테이블의 모든 row를 가져오면 된다!
+
+먼저 테스트 메소드부터 작성해보자.
+
+```java
+@Test
+public void getAll()  {
+    dao.add(user1); // Id: gyumee
+    List<User> users1 = dao.getAll();
+    assertThat(users1.size(), is(1));
+    checkSameUser(user1, users1.get(0));
+
+    dao.add(user2); // Id: leegw700
+    List<User> users2 = dao.getAll();
+    assertThat(users2.size(), is(2));
+    checkSameUser(user1, users2.get(0));
+    checkSameUser(user2, users2.get(1));
+
+    dao.add(user3); // Id: bumjin
+    List<User> users3 = dao.getAll();
+    assertThat(users3.size(), is(3));
+    checkSameUser(user3, users3.get(0));
+    checkSameUser(user1, users3.get(1));
+    checkSameUser(user2, users3.get(2));
+}
+
+
+// 검증 코드는 테스트에서 반복적으로 사용되기 때문에 분리해놓음.
+private void checkSameUser(User user1, User user2) {
+    assertThat(user1.getId(), is(user2.getId()));
+    assertThat(user1.getName(), is(user2.getName()));
+    assertThat(user1.getPassword(), is(user2.getPassword()));
+    assertThat(user1.getEmail(), is(user2.getEmail()));
+    assertThat(user1.getLevel(), is(user2.getLevel()));
+    assertThat(user1.getLogin(), is(user2.getLogin()));
+    assertThat(user1.getRecommend(), is(user2.getRecommend()));
+}
+```
+
+user1, user2, user3 를 차례로 추가하면서 getAll() 이 돌려주는 리스트의 크기와 리스트에 담긴 User 오브젝트의 내용을 픽스처와 비교함.
+
+#### query() 템플릿을 이용하는 getAll() 구현
+
+이제 이 테스트를 성공시키는 getAll() 메소드를 작성해보자.
+
+- JdbcTemplate의 query() 메소드를 사용함.
+- query()는 여러 개의 row가 결과로 나오는 일반적인 경우에서 쓸 수 있다.
+- query()의 리턴 타입은 List<T>!
+
+```java
+public List<User> getAll() {
+    return this.jdbcTemplate.query("select * from users order by id",
+        new RowMapper<User>() {
+            public User mapRow(ResultSet rs, int rowNum) throws SQLException {
+                User user = new User();
+                user.setId(rs.getString("id"));
+                user.setName(rs.getString("name"));
+                user.setPassword(rs.getString("password"));
+                return user;
+            }
+        }
+    )
+}
+```
+
+- query() 템플릿은 SQL을 실행해서 얻은 ResultSet의 모든 row를 열람하면서 로우마다 RowMapper 콜백을 호출함.
+- SQL 쿼리를 실행하여 DB에서 가져온 row의 개수만큼 호출될 것.
+
+#### 테스트 보완
+
+getAll() 역시도 네거티브 테스트를 진행해야 한다.
+
+- 여기서는 만약 결과가 하나도 없는 경우에 getAll()을 실행했을 때 어떻게 되는지를 검증해야 한다.
+
+```java
+@Test
+public void getAll() {
+    dao.deleteAll();
+
+    List<User> users0 = dao.getAll();
+    assertThat(users0.size(), is(0));
+}
+```
+
 ### 🌱 재사용 가능한 콜백의 분리
+
+#### DI를 위한 코드 정리
+
+- 필요하지 않은 DataSource인스턴스 변수를 제거하면 JdbcTemplate 인스턴스 변수와 DataSource 타입 수정자 메소드만 깔끔하게 남는다.
+
+#### 중복 제거
+
+get()과 getAll()에서 둘다 RowMapper의 내용이 똑같다는 사실을 알 수 있다.
+
+앞으로도 다양한 조건으로 사용자를 조회하는 검색 기능이 추가될 수도 있기에 매번 동일한 RowMapper를 사용하게 될 예정이라면 중복되는 부분은 제거해주는 것이 좋다.
+
+- RowMapper 콜백 오브젝트에는 상태가정보가 없으므로 하나만 만들어서 공유해도 좋다.
+
+```java
+public class UserDao {
+    private RowMapper<User> userMapper = new RowMapper<User>() {
+        public User mapRow(ResultSet rs, int rowNum) throws SQLException {
+            User user = new User();
+            user.setId(rs.getString("id"));
+            user.setName(rs.getString("name"));
+            user.setPassword(rs.getString("password"));
+            return user;
+        }
+    }
+}
+```
+
+이렇게 생성한 콜백 오브젝트는 get()과 getAll() 에서 사용할 수 있다.
+
+```java
+public User get(String id){
+    return this.jdbcTemplate.queryForObject(
+        "select * from users where id = ?",
+        new Object[] {id}, this.userMapper);
+}
+
+public List<User> getAll(){
+    return this.jdbcTemplate.queryForObject(
+        "select * from users order by id",
+        this.userMapper);
+}
+```
+
+#### 템플릿/콜백 패턴과 UserDao
+
+UserDao에는 User정보를 DB에 넣거나 가져오거나 조작하는 방법에 대한 핵심적인 로직만 담게 되었다.
+
+User라는 자바 오브젝트와 USER 테이블 사이에 어떻게 정보를 주고 받을지, DB와 커뮤니케이션하기 위한 SQL 문장이 어떤 것인지에 대한 최적화된 코드를 갖고 있다.
+
+반면에 JDBC API를 사용하는 방식, 예외처리, 리소스 반납, DB 연결에 관한 책임과 관심은 모두 JdbcTemplate에 있다.
+
+- 다만 JdbcTemplate이라는 템플릿 클래스를 직접 이용한다는 점에서 결합이 강함.
+- 만약 더 낮은 결합을 유지하고 싶다면 JdbcTemplate을 독립적인 빈으로 등록하여 JdbcTemplate이 구현하고 있는 JdbcOperations 인터페이스를 통해 DI 받아 사용하도록 만들어도 된다.
+
+<br>
+
+근데 만약 UserDao를 여기서 더 개선할 수 있을까?
+
+1. userMapper가 인스턴스 변수로 설저오디어 있고, 한 번 만들어지면 변경되지 않는 프로퍼티와 같은 성격을 띠고 있으니 아예 UserDao 빈의 DI용 프로퍼티로 만들어버린다면?
+   - User의 프로퍼티와 User 테이블의 필드 이름이 바뀌거나 매핑 방식이 바뀌는 경우에 UserDao 코드를 수정하지 않고도 매핑 정보 변경이 가능해진다.
+2. DAO 메소드에서 사용하는 SQL 문장을 외부 리소스에 담고 이를 읽어와 사용하게 하는 것이다.
