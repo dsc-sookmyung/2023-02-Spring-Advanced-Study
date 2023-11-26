@@ -74,11 +74,10 @@ public void method3() throws Exception {
 
 - 가장 중요한 것은 체크 예외(명시적인 처리가 필요한 예외를 사용하고 다루는 방법)을 다루는 것
 - **Error**
+
   - java.lang.Error 클래스의 서브 클래스
   - 주로 자바 VM에서 발생시키는 것으로 애플리케이션 코드에서 잡으려고 해도 대응방법이 없음
   - 개발자가 신경쓰지 않아도 됨
-
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/cffbc2f7-d0a1-4cb5-bca1-2978cc0c8da7/179e016b-b178-4e05-822f-ad6d49ca825d/Untitled.png)
 
 - **Exception과 체크 예외**
   - java.lang.Exception 클래스와 그 서브 클래스로 개발자들이 사용함
@@ -284,6 +283,8 @@ public void add(User user) throws DuplicateUserIdException {
   - ✨ **SQLException을 런타임 예외 DataAccessException으로 포장해 던짐**
   - 스프링을 사용하는 측은 꼭 필요한 경우에만 catch 해서 처리하면 됨
 
+</br>
+
 # 2️⃣ 예외 전환
 
 - 예외 전환 목적1) 런타임 예외로 포장해서 굳이 필요하지 않은 catch/throws를 줄여주는 것
@@ -483,6 +484,8 @@ public void sqlExceptionTranslate() {
     }
 }
 ```
+
+</br>
 
 # 3️⃣ 정리
 
