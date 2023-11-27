@@ -1,6 +1,6 @@
 # 4장 예외
-
-## 사라진 SQLException
+예외와 관련된 코드는 자주 엉망이 되거나 무성의하게 만들어지기 쉽다. 하지만 잘못된 예외처리 코드 때문에 찾기 힘든 버그를 낳을 수도 있고, 생각지 않았던 예외상황이 발생했을 때 상상 이상으로 난처해질 수도 있다. 4장에선느 예외를 처리하는 베스트 프랙티스를 살펴본다.<br/>
+## 4.1 사라진 SQLException
 
 ### 초난감 예외처리
 
@@ -8,7 +8,7 @@
     
     ```yaml
     try {
-    	...
+        ...
     } catch(SQLEXception e) {
     }
     
@@ -20,23 +20,23 @@
     
     ```yaml
     try {
-    	...
+        ...
     } catch(SQLEXception e) {
-    	System.out.println(e);
+        System.out.println(e);
     }
     
     try {
-    	...
+        ...
     } catch(SQLEXception e) {
-    	e.printStackTrace();
+        e.printStackTrace();
     }
     ```
     
     콘솔 로그를 누군가가 계속 모니터링하지 않는 한 이 예외 코드는 심각한 폭탄으로 남아 있을 것이다. 모든 예외는 적절하게 복구되든지 아니면 작업을 중단시키고 운영자 또는 개발자에게 분명하게 통보돼야 한다.
     
 
-> ☘️ **예외를 처리할 때 반드시 지켜야할 핵심 원칙 한 가지** 
-모든 예외는 적절하게 복구되든지 아니면 작업을 중단시키고 운영자 또는 개발자에게 분명하게 통보돼야 한다.
+> ☘️ **예외를 처리할 때 반드시 지켜야할 핵심 원칙 한 가지** <br/>
+모든 예외는 적절하게 복구되든지 아니면 작업을 중단시키고 운영자 또는 개발자에게 분명하게 통보되어야 한다.
 > 
 - 무의미하고 무책임한 throws
     
@@ -57,9 +57,11 @@
 
 ### 예외의 종류와 특징
 
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/b59c417a-fdb8-406e-9d25-6822b58d8c5c/Untitled.png)
+![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/0e10c7f1-fee0-459f-ac1b-26756f437b21)
 
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/f99fbc47-4105-4bee-84c9-8fff10da1b47/e9785311-c038-471b-958f-37db1039e94a/Untitled.png)
+
+![image](https://github.com/lizuAg/2023-02-Spring-Advanced-Study/assets/68546023/a625d3a7-af78-4839-ad45-fd7525e968ec)
+
 
 - Error
     - java.lang.Error 클래스의 서브클래스
@@ -117,8 +119,8 @@
       }
       catch(SQLException e) {
         // 로그 출력
-    	  throw e;
-    	} 
+        throw e;
+        } 
     }
     ```
     
@@ -193,14 +195,14 @@
     
     ex) 출금 시 잔액 부족 상황
     
-
+<br/>
 ## 4.2 예외 전환
 
 - 예외 전환의 목적은 두 가지라고 설명했다. 하나는 앞에서 적용해본 것처럼 런타임 예외로 포장해서 굳이 필요하지 않은 catch/throws를 줄여주는 것이고, 다른 하나는 로우레벨의 예외를 좀 더 의미 있고 추상화된 예외로 바꿔서 던져주는 것이다.
 - 스프링은 자바의 다양한 데이터 액세스 기술을 사용할 때 발생하는 예외들을 추상화해서 DataAccessException 계층 구조 안에 정리해두었다.
 - 낙관적인 락킹(optimistic locking) 상황에서, 사용자들에게 적절한 안내와 다시 시도할 수 있도록 하기 위해서는 JDO, JPA, 하이버네이트 ORM 기술 각각의 예외를 처리해야한다.
 - 이때는 슈퍼크래스를 상속해서 사용한다면 일관된 방식으로 처리할 수 있을 것이다.
-
+<br/>
 ## 4.3 정리
 
 1) 예외를 잡아서 아무런 조취를 취하지 않거나 의미없는 throws 선언을 남발하는 것은 위험하다.
